@@ -9,9 +9,14 @@ bl_info = {
 	"wiki_url": "",
 	"tracker_url": "",
 	"support": "COMMUNITY",
-	"category": "Workflow"}
+	"category": "Workflow"
+	}
 
 import bpy
+import bmesh
+from bpy.props import StringProperty, BoolProperty, IntProperty
+from bpy.types import Operator
+import re
 
 def get_object_property(property, obj):
 	# Check if the object has the specificed custom property
@@ -20,6 +25,58 @@ def get_object_property(property, obj):
 		return obj[property]
 	else:
 		return 0
+        
+class SplitMesh(bpy.types.Operator):
+    bl_idname = "object.split_mesh"
+    bl_label = "Split Mesh"
+
+    def execute(self, context):
+        original_mesh = context.active_object
+        if original_mesh is None or original_mesh.type != 'MESH':
+            self.report({'ERROR'}, "No active mesh object selected")
+            return {'CANCELLED'}
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='DESELECT')
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        while len(original_mesh.data.vertices) >= 255:
+            selected_vertices = 0
+            for poly in original_mesh.data.polygons:
+                if selected_vertices + len(poly.vertices) > 255:
+                    break
+                poly.select = True
+                selected_vertices += len(poly.vertices)
+
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.separate(type='SELECTED')
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            new_mesh = context.selected_objects[0]
+            identifier = self.get_next_identifier()
+            new_mesh.name = "PolygonSoupMesh_{:03d}".format(identifier)
+            new_mesh.data.name = new_mesh.name
+            new_mesh.location = original_mesh.location
+            new_mesh.rotation_euler = original_mesh.rotation_euler
+            new_mesh.scale = original_mesh.scale
+
+        return {'FINISHED'}
+
+    def get_next_identifier(self):
+        existing_identifiers = [int(obj.name[17:20].rstrip('.')) for obj in bpy.context.scene.objects if obj.name.startswith('PolygonSoupMesh_')]
+        existing_identifiers.sort()
+        for i in range(1, len(existing_identifiers) + 2):
+            if i not in existing_identifiers:
+                return i
+
+
+class BPCreatePolygonSoup(bpy.types.Operator):
+    bl_idname = "object.bp_create_polygon_soup"
+    bl_label = "BP - Create Polygon Soup"
+
+    def execute(self, context):
+        bpy.ops.object.split_mesh()
+        return {'FINISHED'}
 
 class BPDeleteLODRenderables(bpy.types.Operator):
 	"""Delete LOD renderables from scene"""
@@ -118,6 +175,8 @@ def register():
 	bpy.utils.register_class(BPDeleteLODRenderables)
 	bpy.utils.register_class(BPDeleteSharedAssets)
 	bpy.utils.register_class(BPCreateCarEmpties)
+	bpy.utils.register_class(BPCreatePolygonSoup)
+	bpy.utils.register_class(SplitMesh)
 
 	bpy.types.VIEW3D_MT_object.append(object_menu_func)
 	bpy.types.VIEW3D_MT_add.append(add_menu_func)
@@ -126,10 +185,16 @@ def unregister():
 	bpy.utils.unregister_class(BPDeleteLODRenderables)
 	bpy.utils.unregister_class(BPDeleteSharedAssets)
 	bpy.utils.unregister_class(BPCreateCarEmpties)
+	bpy.utils.unregister_class(BPCreatePolygonSoup)
+	bpy.utils.unregister_class(SplitMesh)
+
+	bpy.types.VIEW3D_MT_object.remove(object_menu_func)
+	bpy.types.VIEW3D_MT_add.remove(add_menu_func)
 
 def object_menu_func(self, context):
 	self.layout.operator(BPDeleteLODRenderables.bl_idname)
 	self.layout.operator(BPDeleteSharedAssets.bl_idname)
+	self.layout.operator(BPCreatePolygonSoup.bl_idname)
 
 def add_menu_func(self, context):
 	self.layout.operator(BPCreateCarEmpties.bl_idname)
