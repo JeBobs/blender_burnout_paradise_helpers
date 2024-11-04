@@ -12,6 +12,8 @@ bl_info = {
 	"category": "Workflow"
 	}
 
+import json
+import os
 import bpy
 import bmesh
 from bpy.props import StringProperty, BoolProperty, IntProperty
@@ -19,64 +21,62 @@ from bpy.types import Operator
 import re
 
 def get_object_property(property, obj):
-	# Check if the object has the specificed custom property
 	if property in obj:
-		# Return the value of the custom property
 		return obj[property]
 	else:
 		return 0
-        
+		
 class SplitMesh(bpy.types.Operator):
-    bl_idname = "object.split_mesh"
-    bl_label = "Split Mesh"
+	bl_idname = "object.split_mesh"
+	bl_label = "Split Mesh"
 
-    def execute(self, context):
-        original_mesh = context.active_object
-        if original_mesh is None or original_mesh.type != 'MESH':
-            self.report({'ERROR'}, "No active mesh object selected")
-            return {'CANCELLED'}
+	def execute(self, context):
+		original_mesh = context.active_object
+		if original_mesh is None or original_mesh.type != 'MESH':
+			self.report({'ERROR'}, "No active mesh object selected")
+			return {'CANCELLED'}
 
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='DESELECT')
-        bpy.ops.object.mode_set(mode='OBJECT')
+		bpy.ops.object.mode_set(mode='EDIT')
+		bpy.ops.mesh.select_all(action='DESELECT')
+		bpy.ops.object.mode_set(mode='OBJECT')
 
-        while len(original_mesh.data.vertices) >= 255:
-            selected_vertices = 0
-            for poly in original_mesh.data.polygons:
-                if selected_vertices + len(poly.vertices) > 255:
-                    break
-                poly.select = True
-                selected_vertices += len(poly.vertices)
+		while len(original_mesh.data.vertices) >= 255:
+			selected_vertices = 0
+			for poly in original_mesh.data.polygons:
+				if selected_vertices + len(poly.vertices) > 255:
+					break
+				poly.select = True
+				selected_vertices += len(poly.vertices)
 
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.separate(type='SELECTED')
-            bpy.ops.object.mode_set(mode='OBJECT')
+			bpy.ops.object.mode_set(mode='EDIT')
+			bpy.ops.mesh.separate(type='SELECTED')
+			bpy.ops.object.mode_set(mode='OBJECT')
 
-            new_mesh = context.selected_objects[0]
-            identifier = self.get_next_identifier()
-            new_mesh.name = "PolygonSoupMesh_{:03d}".format(identifier)
-            new_mesh.data.name = new_mesh.name
-            new_mesh.location = original_mesh.location
-            new_mesh.rotation_euler = original_mesh.rotation_euler
-            new_mesh.scale = original_mesh.scale
+			new_mesh = context.selected_objects[0]
+			identifier = self.get_next_identifier()
+			new_mesh.name = "PolygonSoupMesh_{:03d}".format(identifier)
+			new_mesh.data.name = new_mesh.name
+			new_mesh.location = original_mesh.location
+			new_mesh.rotation_euler = original_mesh.rotation_euler
+			new_mesh.scale = original_mesh.scale
 
-        return {'FINISHED'}
+		return {'FINISHED'}
 
-    def get_next_identifier(self):
-        existing_identifiers = [int(obj.name[17:20].rstrip('.')) for obj in bpy.context.scene.objects if obj.name.startswith('PolygonSoupMesh_')]
-        existing_identifiers.sort()
-        for i in range(1, len(existing_identifiers) + 2):
-            if i not in existing_identifiers:
-                return i
+	def get_next_identifier(self):
+		existing_identifiers = [int(obj.name[17:20].rstrip('.')) for obj in bpy.context.scene.objects if obj.name.startswith('PolygonSoupMesh_')]
+		existing_identifiers.sort()
+		for i in range(1, len(existing_identifiers) + 2):
+			if i not in existing_identifiers:
+				return i
 
 
 class BPCreatePolygonSoup(bpy.types.Operator):
-    bl_idname = "object.bp_create_polygon_soup"
-    bl_label = "BP - Create Polygon Soup"
+	bl_idname = "object.bp_create_polygon_soup"
+	bl_label = "BP - Create Polygon Soup"
 
-    def execute(self, context):
-        bpy.ops.object.split_mesh()
-        return {'FINISHED'}
+	def execute(self, context):
+		bpy.ops.object.split_mesh()
+		return {'FINISHED'}
 
 class BPDeleteLODRenderables(bpy.types.Operator):
 	"""Delete LOD renderables from scene"""
@@ -92,7 +92,6 @@ class BPDeleteLODRenderables(bpy.types.Operator):
 
 			if renderable_index > 0:
 				bpy.data.objects.remove(obj)
-
 		return {'FINISHED'}
 
 class BPDeleteSharedAssets(bpy.types.Operator):
@@ -169,6 +168,152 @@ class BPCreateCarEmpties(bpy.types.Operator):
 				print(name + " Location: " + str(active.matrix_world))
 
 			return {'FINISHED'}
+		
+class BPNameFromResourceDB(bpy.types.Operator):
+	"""BP - Name from Resource DB"""
+	bl_idname = "object.name_from_resource_db"
+	bl_label = "BP - Name from Resource DB"
+	bl_options = {'REGISTER', 'UNDO'}
+	
+	folder_path: StringProperty(
+		name="Folder Path",
+		description="Folder containing JSON files",
+		default=os.path.expanduser("~"),  # Set home folder as the default
+		maxlen=1024,
+		subtype='DIR_PATH'
+	)
+
+	def clean_name(self, full_name):
+		"""
+		Clean up the name by removing .Material, .Texture, .Object, and ?ID= parts.
+		"""
+		name = full_name.split(".")[0]
+		name = name.split("?ID=")[0]
+		name = re.sub(r"_LOD\d+", "", name)
+		return name
+
+	def find_name_by_id(self, json_data, object_id):
+		"""
+		Look for a matching name based on the object_id (GameExplorerIndex) in the JSON data.
+		"""
+		for key, value in json_data.items():
+			match = re.search(r"\?ID=(\d+)", value)
+			if match and match.group(1) == str(object_id):
+				return self.clean_name(value.split("/")[-1])
+		return None
+
+	def execute(self, context):
+		if not os.path.exists(self.folder_path):
+			self.report({'ERROR'}, f"Path not found: {self.folder_path}")
+			return {'CANCELLED'}
+
+		json_data = {}
+		for filename in os.listdir(self.folder_path):
+			if filename.endswith(".json"):
+				with open(os.path.join(self.folder_path, filename), 'r') as json_file:
+					data = json.load(json_file)
+					json_data.update({k.lower(): v for k, v in data.items()})
+		
+		for material in bpy.data.materials:
+			if "_" in material.name:
+				material_id = material.name.replace("_", "").lower()
+				if material_id in json_data:
+					new_name = json_data[material_id].split("/")[-1]
+					cleaned_name = self.clean_name(new_name)
+					material.name = cleaned_name
+					self.report({'INFO'}, f"Renamed material {material_id} to {cleaned_name}")
+		
+		for texture in bpy.data.textures:
+			if "_" in texture.name:
+				texture_id = texture.name.replace("_", "").lower()
+				if texture_id in json_data:
+					new_name = json_data[texture_id].split("/")[-1]
+					cleaned_name = self.clean_name(new_name)
+					texture.name = cleaned_name
+					self.report({'INFO'}, f"Renamed texture {texture_id} to {cleaned_name}")
+
+		for obj in bpy.data.objects:
+			if "_" in obj.name:
+				object_id = obj.name.replace("_", "").lower()
+				if object_id in json_data:
+					new_name = json_data[object_id].split("/")[-1]
+					cleaned_name = self.clean_name(new_name)
+					obj.name = cleaned_name
+					self.report({'INFO'}, f"Renamed object {object_id} to {cleaned_name}")
+				else:
+					if "GameExplorerIndex" in obj:
+						game_explorer_index = obj["GameExplorerIndex"]
+						name_by_id = self.find_name_by_id(json_data, game_explorer_index)
+						if name_by_id:
+							obj.name = name_by_id
+							self.report({'INFO'}, f"Renamed object by GameExplorerIndex {game_explorer_index} to {name_by_id}")
+
+		return {'FINISHED'}
+	
+class BPDeletePropParts(bpy.types.Operator):
+	"""BP - Delete Prop Parts"""
+	bl_idname = "object.delete_prop_parts"
+	bl_label = "BP - Delete Prop Parts"
+	bl_options = {'REGISTER', 'UNDO'}
+
+	def execute(self, context):
+		objects_to_delete = []
+
+		for obj in bpy.context.scene.objects:
+			if "prop_type" in obj:
+				if obj["prop_type"] == "prop_part":
+					objects_to_delete.append(obj)
+					objects_to_delete.extend(obj.children)
+		
+		for obj in objects_to_delete:
+			bpy.data.objects.remove(obj, do_unlink=True)
+
+		self.report({'INFO'}, f"Deleted {len(objects_to_delete)} prop parts")
+		return {'FINISHED'}
+	
+class BPDeletePropAlternatives(bpy.types.Operator):
+	"""BP - Delete Prop Alternatives"""
+	bl_idname = "object.delete_prop_alternatives"
+	bl_label = "BP - Delete Prop Alternatives"
+	bl_options = {'REGISTER', 'UNDO'}
+
+	def execute(self, context):
+		objects_to_delete = []
+
+		for obj in bpy.context.scene.objects:
+			if "prop_type" in obj:
+				if obj["prop_type"] == "prop_alternative":
+					objects_to_delete.append(obj)
+					objects_to_delete.extend(obj.children)
+		
+		for obj in objects_to_delete:
+			bpy.data.objects.remove(obj, do_unlink=True)
+
+		self.report({'INFO'}, f"Deleted {len(objects_to_delete)} alternative props")
+		return {'FINISHED'}
+
+
+class BPDeleteBackdrops(bpy.types.Operator):
+	"""BP - Delete Backdrops"""
+	bl_idname = "object.delete_backdrop_objects"
+	bl_label = "BP - Delete Backdrops"
+	bl_options = {'REGISTER', 'UNDO'}
+
+	name_substrings = ["BD_", "BdZone", "_backdrop"]
+
+	def execute(self, context):
+		objects_to_delete = set()
+
+		for obj in bpy.context.scene.objects:
+			if any(substring.lower() in obj.name.lower() for substring in self.name_substrings):
+				objects_to_delete.add(obj)
+				objects_to_delete.update(obj.children)
+		
+		for obj in objects_to_delete:
+			bpy.data.objects.remove(obj, do_unlink=True)
+
+		self.report({'INFO'}, f"Deleted {len(objects_to_delete)} backdrop objects")
+		return {'FINISHED'}
 
 
 def register():
@@ -176,30 +321,38 @@ def register():
 	bpy.utils.register_class(BPDeleteSharedAssets)
 	bpy.utils.register_class(BPCreateCarEmpties)
 	bpy.utils.register_class(BPCreatePolygonSoup)
+	bpy.utils.register_class(BPDeletePropParts)
+	bpy.utils.register_class(BPDeletePropAlternatives)
+	bpy.utils.register_class(BPDeleteBackdrops)
+	bpy.utils.register_class(BPNameFromResourceDB)
 	bpy.utils.register_class(SplitMesh)
 
 	bpy.types.VIEW3D_MT_object.append(object_menu_func)
 	bpy.types.VIEW3D_MT_add.append(add_menu_func)
 
+
 def unregister():
 	bpy.utils.unregister_class(BPDeleteLODRenderables)
 	bpy.utils.unregister_class(BPDeleteSharedAssets)
 	bpy.utils.unregister_class(BPCreateCarEmpties)
+	bpy.utils.unregister_class(BPDeletePropParts)
+	bpy.utils.unregister_class(BPDeletePropAlternatives)
+	bpy.utils.unregister_class(BPDeleteBackdrops)
 	bpy.utils.unregister_class(BPCreatePolygonSoup)
+	bpy.utils.unregister_class(BPNameFromResourceDB)
 	bpy.utils.unregister_class(SplitMesh)
 
 	bpy.types.VIEW3D_MT_object.remove(object_menu_func)
 	bpy.types.VIEW3D_MT_add.remove(add_menu_func)
 
 def object_menu_func(self, context):
+	self.layout.operator(BPNameFromResourceDB.bl_idname)
 	self.layout.operator(BPDeleteLODRenderables.bl_idname)
 	self.layout.operator(BPDeleteSharedAssets.bl_idname)
+	self.layout.operator(BPDeletePropParts.bl_idname)
+	self.layout.operator(BPDeletePropAlternatives.bl_idname)
+	self.layout.operator(BPDeleteBackdrops.bl_idname)
 	self.layout.operator(BPCreatePolygonSoup.bl_idname)
 
 def add_menu_func(self, context):
 	self.layout.operator(BPCreateCarEmpties.bl_idname)
-
-# This allows you to run the script directly from blenders text editor
-# to test the addon without having to install it.
-#if __name__ == "__main__":
-#    register()
