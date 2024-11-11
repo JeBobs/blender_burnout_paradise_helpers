@@ -19,6 +19,7 @@ import bmesh
 from bpy.props import StringProperty, BoolProperty, IntProperty
 from bpy.types import Operator
 import re
+from bpy_extras.io_utils import ImportHelper
 
 def get_object_property(property, obj):
 	if property in obj:
@@ -169,17 +170,18 @@ class BPCreateCarEmpties(bpy.types.Operator):
 
 			return {'FINISHED'}
 		
-class BPNameFromResourceDB(bpy.types.Operator):
+class BPNameFromResourceDB(Operator, ImportHelper):
 	"""BP - Name from Resource DB"""
 	bl_idname = "object.name_from_resource_db"
 	bl_label = "BP - Name from Resource DB"
 	bl_options = {'REGISTER', 'UNDO'}
+
+	filename_ext = ""  # No file extension since we're selecting a directory
+	use_filter_folder = True  # Allow folder selection
 	
-	folder_path: StringProperty(
-		name="Folder Path",
+	directory: StringProperty(
+		name="Directory",
 		description="Folder containing JSON files",
-		default=os.path.expanduser("~"),  # Set home folder as the default
-		maxlen=1024,
 		subtype='DIR_PATH'
 	)
 
@@ -203,14 +205,14 @@ class BPNameFromResourceDB(bpy.types.Operator):
 		return None
 
 	def execute(self, context):
-		if not os.path.exists(self.folder_path):
-			self.report({'ERROR'}, f"Path not found: {self.folder_path}")
+		if not os.path.exists(self.directory):
+			self.report({'ERROR'}, f"Path not found: {self.directory}")
 			return {'CANCELLED'}
 
 		json_data = {}
-		for filename in os.listdir(self.folder_path):
+		for filename in os.listdir(self.directory):
 			if filename.endswith(".json"):
-				with open(os.path.join(self.folder_path, filename), 'r') as json_file:
+				with open(os.path.join(self.directory, filename), 'r') as json_file:
 					data = json.load(json_file)
 					json_data.update({k.lower(): v for k, v in data.items()})
 		
