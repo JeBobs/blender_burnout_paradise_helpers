@@ -17,7 +17,7 @@ You should now be able to see the options:
 - `Object` > `BP - Delete LOD Renderables`
 - `Object` > `BP - Delete Shared Assets`
 - `Object` > `BP - Delete Prop Parts`
-- `Object` > `BP - Delete Prop Altematives`
+- `Object` > `BP - Delete Prop Altenatives`
 - `Object` > `BP - Delete Backdrops`
 - `Object` > `BP - Create Polygon Soup`
 
