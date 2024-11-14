@@ -176,7 +176,6 @@ class BPNameFromResourceDB(Operator, ImportHelper):
 	bl_label = "BP - Name from Resource DB"
 	bl_options = {'REGISTER', 'UNDO'}
 
-	filename_ext = ""  # No file extension since we're selecting a directory
 	use_filter_folder = True  # Allow folder selection
 	
 	directory: StringProperty(
