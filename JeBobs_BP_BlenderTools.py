@@ -77,6 +77,27 @@ class BPCreatePolygonSoup(bpy.types.Operator):
 
 	def execute(self, context):
 		bpy.ops.object.split_mesh()
+	
+		for obj in bpy.context.selected_objects:
+			if obj.type == 'MESH':
+				bpy.context.view_layer.objects.active = obj
+				bpy.ops.object.origin_set(type='ORIGIN_CENTER_OF_MASS', center='BOUNDS')
+				original_location = obj.matrix_world.translation.copy()
+				original_rotation = obj.matrix_world.to_euler()
+				obj.location = (0, 0, 0)
+				obj.rotation_euler = (0, 0, 0)
+				mesh_name = obj.name
+				number = extract_number(mesh_name)
+				empty_name = f"PolygonSoup_{number}"
+				bpy.ops.object.empty_add(type='PLAIN_AXES', location=(0, 0, 0))
+				empty = bpy.context.object
+				empty.name = empty_name
+				obj.parent = empty
+				empty.location = original_location
+				empty.rotation_euler = original_rotation
+				obj.location = (0, 0, 0)
+				obj.rotation_euler = (0, 0, 0)
+					
 		return {'FINISHED'}
 
 class BPDeleteLODRenderables(bpy.types.Operator):
