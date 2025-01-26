@@ -83,18 +83,27 @@ class BPCreatePolygonSoup(bpy.types.Operator):
 				bpy.context.view_layer.objects.active = obj
 				bpy.ops.object.origin_set(type='ORIGIN_CENTER_OF_MASS', center='BOUNDS')
 				original_location = obj.matrix_world.translation.copy()
-				original_rotation = obj.matrix_world.to_euler()
-				obj.location = (0, 0, 0)
-				obj.rotation_euler = (0, 0, 0)
 				mesh_name = obj.name
 				number = extract_number(mesh_name)
 				empty_name = f"PolygonSoup_{number}"
 				bpy.ops.object.empty_add(type='PLAIN_AXES', location=(0, 0, 0))
 				empty = bpy.context.object
 				empty.name = empty_name
+				empty.rotation_euler = (1.5708, 0, 1.5708)
+				empty.scale = (0.015, 0.015, 0.015)
+				obj.rotation_euler = (obj.rotation_euler.to_matrix() @ empty.rotation_euler.to_matrix().inverted()).to_euler()
+				obj.scale = (
+					obj.scale[0] / empty.scale[0],
+					obj.scale[1] / empty.scale[1],
+					obj.scale[2] / empty.scale[2]
+				)
+				bpy.context.view_layer.objects.active = obj
+				obj.select_set(True)
+				bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
 				obj.parent = empty
 				empty.location = original_location
-				empty.rotation_euler = original_rotation
+				empty.rotation_euler = (1.5708, 0, 1.5708)
+				empty.scale = (0.015, 0.015, 0.015)
 				obj.location = (0, 0, 0)
 				obj.rotation_euler = (0, 0, 0)
 					
