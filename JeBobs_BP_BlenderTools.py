@@ -26,6 +26,10 @@ def get_object_property(property, obj):
 		return obj[property]
 	else:
 		return 0
+	
+def extract_number(name):
+	match = re.search(r'_(\d+)', name)
+	return match.group(1) if match else '000'
 		
 class SplitMesh(bpy.types.Operator):
 	bl_idname = "object.split_mesh"
@@ -64,7 +68,15 @@ class SplitMesh(bpy.types.Operator):
 		return {'FINISHED'}
 
 	def get_next_identifier(self):
-		existing_identifiers = [int(obj.name[17:20].rstrip('.')) for obj in bpy.context.scene.objects if obj.name.startswith('PolygonSoupMesh_')]
+		existing_identifiers = []
+		for obj in bpy.context.scene.objects:
+			if obj.name.startswith('PolygonSoupMesh_'):
+				try:
+					identifier = int(obj.name[16:].split('.')[0])
+					existing_identifiers.append(identifier)
+				except ValueError:
+					pass
+
 		existing_identifiers.sort()
 		for i in range(1, len(existing_identifiers) + 2):
 			if i not in existing_identifiers:
