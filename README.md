@@ -13,7 +13,12 @@ Helper tools to work within the workflow of Burnout Paradise assets, in tandem w
 
 You should now be able to see the options:
 - `Add` > `BP - Create Car Empties` 
+- `Object` > `BP - Name from Resource DB`
 - `Object` > `BP - Delete LOD Renderables`
 - `Object` > `BP - Delete Shared Assets`
+- `Object` > `BP - Delete Prop Parts`
+- `Object` > `BP - Delete Prop Altenatives`
+- `Object` > `BP - Delete Backdrops`
+- `Object` > `BP - Create Polygon Soup`
 
-in their respctive context menus or in your search panel, in object mode.
+in their respective context menus or in your search panel, in object mode.
